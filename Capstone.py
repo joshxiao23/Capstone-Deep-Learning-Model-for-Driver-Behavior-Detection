@@ -1000,3 +1000,130 @@ heatmap = make_gradcam_heatmap_tensor(
 
 # DISPLAY
 display_gradcam(original_img, heatmap)
+
+
+
+
+
+
+
+
+# # TESTER
+# SEQUENCE PREDICTION HELPERS FOR CNN-RNN MODEL
+def load_sequence_from_folder(folder_path, img_size=IMG_SIZE, sequence_length=16):
+    valid_exts = (".jpg", ".jpeg", ".png", ".bmp")
+    all_files = sorted([
+        f for f in os.listdir(folder_path)
+        if f.lower().endswith(valid_exts)
+    ])
+
+    if not all_files:
+        raise ValueError(f"No image files found in folder: {folder_path}")
+        
+    selected_files = all_files[:sequence_length]
+
+    frames = []
+    file_list = []
+    for fname in selected_files:
+        fpath = os.path.join(folder_path, fname)
+        img = keras_image.load_img(fpath, target_size=img_size)
+        img_arr = keras_image.img_to_array(img) 
+        frames.append(img_arr)
+        file_list.append(fpath)
+
+    seq_array = np.stack(frames, axis=0)         
+    seq_array = np.expand_dims(seq_array, axis=0)
+    return seq_array, file_list
+
+def predict_sequence(seq_model, folder_path, class_names, sequence_length=16, threshold=0.5):
+
+    seq_array, file_list = load_sequence_from_folder(
+        folder_path,
+        img_size=IMG_SIZE,
+        sequence_length=sequence_length,
+    )
+
+    prob_notdrowsy = float(seq_model.predict(seq_array, verbose=0)[0][0])
+    prob_drowsy = 1.0 - prob_notdrowsy
+
+    if prob_notdrowsy >= threshold:
+        predicted_idx = 1  
+    else:
+        predicted_idx = 0 
+
+    predicted_label = class_names[predicted_idx]
+
+    print("Sequence folder:", folder_path)
+    print("Frames used (in order):")
+    for path in file_list:
+        print("  -", path)
+
+    print("\nPredicted label:", predicted_label)
+    print(f"  P(drowsy)    = {prob_drowsy:.3f}")
+    print(f"  P(notdrowsy) = {prob_notdrowsy:.3f}")
+    print(f"  Decision threshold = {threshold:.2f}")
+    return predicted_label, prob_drowsy, prob_notdrowsy
+
+def plot_sequence_confidence(prob_drowsy, prob_notdrowsy, save_path=None):
+    labels = ["drowsy", "notdrowsy"]
+    probs = [prob_drowsy, prob_notdrowsy]
+
+    fig = plt.figure(figsize=(4, 4))
+    bars = plt.bar(labels, probs)
+
+    for bar, p in zip(bars, probs):
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height + 0.01,
+            f"{p:.2f}",
+            ha="center",
+            va="bottom",
+        )
+
+    plt.ylim(0.0, 1.05)
+    plt.ylabel("Probability")
+    plt.title("Sequence-level confidence")
+    plt.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight")
+
+    plt.show()
+
+TEST_SEQUENCE_FOLDER = r"C:\Users\JennyZ\Desktop\GCU\Jupyter Dataset\TEST"  
+
+if not os.path.isdir(TEST_SEQUENCE_FOLDER):
+    raise ValueError(f"Folder does not exist: {TEST_SEQUENCE_FOLDER}")
+else:
+    print("✔ Folder found:", TEST_SEQUENCE_FOLDER)
+
+sequence_len_for_test = SEQUENCE_LENGTH
+
+try:
+    seq_model
+except NameError:
+    print("[INFO] seq_model not found in memory. Rebuilding architecture (CNN+RNN) and loading weights...")
+
+    # 1) rebuild the same architecture
+    seq_model = build_cnn_rnn_model(
+        sequence_length=SEQUENCE_LENGTH,
+        img_size=IMG_SIZE,
+        num_classes=len(class_names)
+    )
+
+    # 2) load weights (recommended)
+    seq_model.load_weights("Hybrid_CNN_RNN_Model.weights.h5")
+    print("✔ Weights loaded successfully.")
+
+# RUN PREDICTION
+pred_label, p_drowsy, p_notdrowsy = predict_sequence(
+    seq_model,
+    TEST_SEQUENCE_FOLDER,
+    class_names,
+    sequence_length=sequence_len_for_test,
+    threshold=0.5
+)
+
+# PLOT
+plot_sequence_confidence(p_drowsy, p_notdrowsy)
