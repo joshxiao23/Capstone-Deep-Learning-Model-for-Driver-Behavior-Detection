@@ -1087,7 +1087,6 @@ if TRAIN_SEQUENCE_MODEL:
 # ---------------------------------------------------------------
 
 
-    
     # ==============================
     # HYBRID BASELINE (BEFORE REFINEMENTS)
     # ==============================
@@ -1110,7 +1109,6 @@ if TRAIN_SEQUENCE_MODEL:
 
     hyb_before_row = evaluate_hybrid_model(seq_model, X_val_seq, y_val_seq, threshold=0.5, tag="HYBRID_BEFORE")
     log_and_show_hybrid_eval(hyb_before_row, class_names)
-
 
 
 # ---------------------------------------------------------------
